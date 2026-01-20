@@ -4,4 +4,16 @@ version = "0.1.0"
 description = "🇰🇪 Dholuo Context-Aware Text-to-Speech (TTS) System"
 readme = "README.md"
 requires-python = ">=3.11"
-dependencies = []
+dependencies = [
+    "accelerate>=0.26.0",
+    "datasets>=4.5.0",
+    "evaluate>=0.4.6",
+    "librosa>=0.11.0",
+    "pandas>=2.3.3",
+    "pyarrow>=23.0.0",
+    "pydub>=0.25.1",
+    "seqeval>=1.2.2",
+    "soundfile>=0.13.1",
+    "torch>=2.9.1",
+    "transformers>=4.57.6",
+]

@@ -5,6 +5,11 @@ build/
 dist/
 wheels/
 *.egg-info
+dholuo_tts.code-workspace
 
 # Virtual environments
 .venv
+/data/
+/env/
+/venv/
+/results/
