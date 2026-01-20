@@ -1,0 +1,7 @@
+[project]
+name = "dholuo-tts"
+version = "0.1.0"
+description = "🇰🇪 Dholuo Context-Aware Text-to-Speech (TTS) System"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = []
