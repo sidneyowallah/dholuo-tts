@@ -1,87 +1,150 @@
+# =========================================================
+# This script provides a technical framework for fine-tuning a Transformer model specifically for Part-of-Speech (POS) tagging using the KenPOS dataset. 
+# The process begins by restructuring raw data from a row-based format into grouped sentences and mapping text labels to numerical identifiers. 
+# It utilizes a pre-trained Afro-XLMR model and includes a specialized function to align word-level tags with subword tokens generated during processing. 
+# The configuration is optimized for high-performance hardware, employing mixed precision training and specific learning rates over multiple epochs. 
+# Finally, the code executes the training routine through a standardized trainer interface and exports the refined model for future linguistic analysis.
+# ==========================================================
+
+
+import os
+import pandas as pd
 import torch
-from datasets import load_dataset
-from transformers import AutoTokenizer, AutoModelForTokenClassification, TrainingArguments, Trainer
-import numpy as np
-
-# 1. Configuration
-# Note: afro-xlmr-large-76L explicitly includes Dholuo (Luo) in its pre-training
-model_name = "Davlan/afro-xlmr-large-76L" 
-dataset_path = "data/dho.parquet"
-
-# 2. Load Dataset
-dataset = load_dataset("parquet", data_files=dataset_path)
-
-# Group tokens by sentence
-def group_by_sentence(examples):
-    sentences = {}
-    for token, pos, sent_id in zip(examples["token"], examples["pos_tag"], examples["sentence_id"]):
-        if sent_id not in sentences:
-            sentences[sent_id] = {"tokens": [], "pos_tags": []}
-        sentences[sent_id]["tokens"].append(token)
-        sentences[sent_id]["pos_tags"].append(pos)
-    return {"tokens": [s["tokens"] for s in sentences.values()], "pos_tags": [s["pos_tags"] for s in sentences.values()]}
-
-grouped = dataset["train"].map(group_by_sentence, batched=True, remove_columns=dataset["train"].column_names)
-
-# Get unique POS tags and create label mappings
-all_pos_tags = set()
-for tags in grouped["pos_tags"]:
-    all_pos_tags.update(tags)
-label2id = {tag: i for i, tag in enumerate(sorted(all_pos_tags))}
-id2label = {i: tag for tag, i in label2id.items()}
-num_labels = len(label2id)
-
-dataset = grouped.train_test_split(test_size=0.1)
-
-# 3. Tokenization
-tokenizer = AutoTokenizer.from_pretrained(model_name)
-
-def tokenize_function(examples):
-    tokenized = tokenizer(examples["tokens"], padding="max_length", truncation=True, max_length=128, is_split_into_words=True)
-    labels = []
-    for i, tags in enumerate(examples["pos_tags"]):
-        word_ids = tokenized.word_ids(batch_index=i)
-        label_ids = [-100 if word_id is None else label2id[tags[word_id]] for word_id in word_ids]
-        labels.append(label_ids)
-    tokenized["labels"] = labels
-    return tokenized
-
-tokenized_datasets = dataset.map(tokenize_function, batched=True)
-
-# 4. Load Model
-model = AutoModelForTokenClassification.from_pretrained(model_name, num_labels=num_labels, id2label=id2label, label2id=label2id) 
-
-# 5. Training Arguments (RunPod Optimized)
-training_args = TrainingArguments(
-    output_dir="./results/cloud",
-    num_train_epochs=3,
-    per_device_train_batch_size=8,   # 3090/4090 can handle 8-16
-    per_device_eval_batch_size=8,
-    gradient_accumulation_steps=2,   # Simulates a batch size of 16
-    learning_rate=2e-5,
-    weight_decay=0.01,
-    eval_strategy="epoch",
-    save_strategy="epoch",
-    logging_dir="./logs",
-    fp16=True,                       # Critical for speed and memory on RunPod
-    gradient_checkpointing=True,     # Saves massive VRAM on 'Large' models
-    load_best_model_at_end=True,
+from datasets import Dataset, Features, Sequence, Value, ClassLabel
+from transformers import (
+    AutoTokenizer, 
+    AutoModelForTokenClassification, 
+    TrainingArguments, 
+    Trainer, 
+    DataCollatorForTokenClassification
 )
 
-# 6. Initialize Trainer
+# ==========================================
+# 1. LOAD AND PREPARE LOCAL DATA
+# ==========================================
+print("Loading KenPOS dho.parquet...")
+df = pd.read_parquet("dho.parquet")
+
+# KenPOS is usually stored as one token per row. 
+# We must group them by sentence_id to create full sentences.
+grouped = df.groupby("sentence_id").agg({
+    "token": list,
+    "pos_tag": list
+}).reset_index()
+
+# Get unique labels and create mappings
+unique_tags = sorted(list(set(df["pos_tag"].unique())))
+label2id = {tag: i for i, tag in enumerate(unique_tags)}
+id2label = {i: tag for tag, i in label2id.items()}
+
+print(f"Unique POS tags found: {unique_tags}")
+
+# Define the Schema (Features)
+# This ensures the dataset is structured correctly for Transformers
+features = Features({
+    "token": Sequence(Value("string")),
+    "tags": Sequence(ClassLabel(num_classes=len(unique_tags), names=unique_tags)),
+    "sentence_id": Value("int64"),
+    "pos_tag": Sequence(Value("string")) # Keep original strings for reference
+})
+
+def map_labels_to_ids(example):
+    example["tags"] = [label2id[tag] for tag in example["pos_tag"]]
+    return example
+
+# Convert Pandas to Hugging Face Dataset
+raw_dataset = Dataset.from_pandas(grouped)
+raw_dataset = raw_dataset.map(map_labels_to_ids)
+dataset = raw_dataset.cast(features)
+
+# Split into 90% training, 10% validation
+dataset = dataset.train_test_split(test_size=0.1)
+
+# ==========================================
+# 2. TOKENIZATION & SUBWORD ALIGNMENT
+# ==========================================
+model_id = "Davlan/afro-xlmr-large-76L"
+tokenizer = AutoTokenizer.from_pretrained(model_id)
+
+def tokenize_and_align_labels(examples):
+    # 'is_split_into_words=True' is critical for POS tagging
+    tokenized_inputs = tokenizer(
+        examples["token"], 
+        truncation=True, 
+        is_split_into_words=True, 
+        max_length=512
+    )
+
+    labels = []
+    for i, label in enumerate(examples["tags"]):
+        word_ids = tokenized_inputs.word_ids(batch_index=i)
+        previous_word_idx = None
+        label_ids = []
+        
+        for word_idx in word_ids:
+            # Special tokens (like <s>) get -100 so they are ignored by the loss function
+            if word_idx is None:
+                label_ids.append(-100)
+            # Only label the FIRST subword of a word
+            elif word_idx != previous_word_idx:
+                label_ids.append(label[word_idx])
+            # Subsequent subwords (e.g., 'nyu', '##mba') get -100
+            else:
+                label_ids.append(-100)
+            previous_word_idx = word_idx
+        labels.append(label_ids)
+
+    tokenized_inputs["labels"] = labels
+    return tokenized_inputs
+
+print("Tokenizing dataset...")
+tokenized_dataset = dataset.map(tokenize_and_align_labels, batched=True)
+
+# ==========================================
+# 3. MODEL INITIALIZATION
+# ==========================================
+model = AutoModelForTokenClassification.from_pretrained(
+    model_id, 
+    num_labels=len(unique_tags),
+    id2label=id2label,
+    label2id=label2id
+)
+
+# ==========================================
+# 4. TRAINING CONFIGURATION (RunPod Optimized)
+# ==========================================
+training_args = TrainingArguments(
+    output_dir="/workspace/luo-pos-tagger",
+    eval_strategy="epoch",
+    save_strategy="epoch",
+    learning_rate=2e-5,
+    per_device_train_batch_size=8, # Adjust based on GPU VRAM
+    per_device_eval_batch_size=8,
+    num_train_epochs=10,           # More epochs for small specific datasets
+    weight_decay=0.01,
+    fp16=True,                     # Uses Mixed Precision for speed on RTX/A100 GPUs
+    logging_steps=50,
+    save_total_limit=1,
+    load_best_model_at_end=True,
+    push_to_hub=False,
+    report_to="none"               # Prevents requiring WandB login
+)
+
 trainer = Trainer(
     model=model,
     args=training_args,
-    train_dataset=tokenized_datasets["train"],
-    eval_dataset=tokenized_datasets["test"],
+    train_dataset=tokenized_dataset["train"],
+    eval_dataset=tokenized_dataset["test"],
+    processing_class=tokenizer,
+    data_collator=DataCollatorForTokenClassification(tokenizer),
 )
 
-# 7. Start Training
+# ==========================================
+# 5. EXECUTE TRAINING
+# ==========================================
 print("Starting training...")
 trainer.train()
 
-# 8. Save Model
-print("Saving model...")
-trainer.save_model("./dholuo_pos_cloud_model")
-tokenizer.save_pretrained("./dholuo_pos_cloud_model")
-print("Model saved to dholuo_pos_cloud_model/")
+# Save the final model
+trainer.save_model("/workspace/luo-pos-final")
+print("Model saved to /workspace/luo-pos-final")

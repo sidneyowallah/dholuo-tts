@@ -6,6 +6,7 @@ dist/
 wheels/
 *.egg-info
 dholuo_tts.code-workspace
+notes.txt
 
 # Virtual environments
 .venv
@@ -13,3 +14,4 @@ dholuo_tts.code-workspace
 /env/
 /venv/
 /results/
+/models/
