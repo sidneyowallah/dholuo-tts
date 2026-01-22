@@ -5,79 +5,84 @@ from tqdm import tqdm
 
 class DholuoG2P:
     def __init__(self):
-        # Order matters! Complex rules first (multi-char), then single chars.
-        self.rules = [
+        # Map complex digraphs first to avoid partial matching
+        # Use special characters for phonemes to avoid "double-dipping"
+        self.mapping = {
             # 1. Digraphs & Special Consonants
-            (r"ng'", "ŋ"),   # Velar nasal (ng'a)
-            (r"ng", "ŋg"),   # Pre-nasalized (panga)
-            (r"ny", "ɲ"),    # Palatal nasal (nyako)
-            (r"th", "ð"),    # Dental fricative (thum) - varies by dialect, sometimes θ
-            (r"dh", "ð"),    # Often voiced dental fricative
-            (r"ch", "tʃ"),   # Affricate (chiro)
-            (r"sh", "ʃ"),    # Fricative (shati)
+            "ng'": "ŋ",    # Velar nasal (ng'a)
+            "ng": "ŋɡ",    # Pre-nasalized (panga)
+            "ny": "ɲ",     # Palatal nasal (nyako)
+            "th": "θ",     # Dental fricative (thum) - varies by dialect, sometimes θ
+            "dh": "ð",     # dho (voiced dental)
+            "ch": "tʃ",    # Affricate (chiro)
+            "sh": "ʃ",     # Fricative (shati)
+            "j": "ɟ",      # voiced palatal plosive (standard Dholuo 'j')
+            "y": "j",      # semi-vowel 'y' -> IPA 'j'
             
             # 2. Vowels (Simple approx - Dholuo has ATR distinction, but standard IPA 'e/o' works for TTS start)
-            (r"a", "a"),
-            (r"e", "ɛ"),     # Open 'e' is common
-            (r"i", "i"),
-            (r"o", "ɔ"),     # Open 'o' is common
-            (r"u", "u"),
-            
+            "a": "a", 
+            "e": "ɛ",      # Open 'e' is common
+            "i": "i", 
+            "o": "ɔ",      # Open 'o' is common
+            "u": "u",
+
             # 3. Standard Consonants
-            (r"b", "b"), (r"p", "p"), (r"m", "m"), (r"w", "w"),
-            (r"f", "f"), (r"v", "v"), (r"t", "t"), (r"d", "d"),
-            (r"s", "s"), (r"n", "n"), (r"l", "l"), (r"r", "r"),
-            (r"y", "j"), (r"k", "k"), (r"g", "g"), (r"h", "h"),
-            (r"j", "dʒ")
-        ]
+            "b": "b", "p": "p", "m": "m", "w": "w",
+            "f": "f", "v": "v", "t": "t", "d": "d",
+            "s": "s", "n": "n", "l": "l", "r": "ɾ",
+            "k": "k", "g": "ɡ", "h": "h"
+        }
+        # Compile a regex to match all keys, longest first
+        pattern = "|".join(re.escape(k) for k in sorted(self.mapping.keys(), key=len, reverse=True))
+        self.regex = re.compile(pattern)
 
     def predict(self, word):
-        word = word.lower().strip()
-        ipa = word
-        
-        for grapheme, phoneme in self.rules:
-            ipa = re.sub(grapheme, phoneme, ipa)
-            
-        return ipa
+        # This replaces everything in ONE pass, preventing double-processing
+        return self.regex.sub(lambda m: self.mapping[m.group(0)], word.lower().strip())
 
 # --- BULK GENERATOR ---
-def generate_db_from_csv(csv_path, output_json="dholuo_pronunciation.json"):
-    print(f"Reading {csv_path}...")
-    df = pd.read_csv(csv_path)
+def generate_g2p_from_metadata(metadata_path, output_json="data/dholuo_lexicon.json"):
+    # 1. Load the metadata.csv (3 columns, pipe-separated)
+    print(f"Reading {metadata_path}...")
+    df = pd.read_csv(metadata_path, sep="|", header=None, names=["id", "raw", "pos"])
     
-    # 1. Extract all unique words from transcriptions
-    all_text = " ".join(df['transcription'].dropna().astype(str).tolist())
-    # Remove punctuation for word list
-    import string
-    translator = str.maketrans('', '', string.punctuation)
-    clean_text = all_text.translate(translator).lower()
-    
-    unique_words = sorted(list(set(clean_text.split())))
-    print(f"Found {len(unique_words)} unique words.")
-    
-    # 2. Convert all to IPA
     g2p = DholuoG2P()
-    db = {}
+    lexicon = {}
     
-    print("Generating IPA...")
-    for word in tqdm(unique_words):
-        # Logic: By default, assign the rule-based IPA to the "DEFAULT" key
-        base_ipa = g2p.predict(word)
-        
-        # Structure it for your POS tagger
-        db[word] = {
-            "DEFAULT": base_ipa,
-            # We leave specific V/NN tags empty for now unless we manually fix them later
-            "V": base_ipa, 
-            "NN": base_ipa 
-        }
-        
-    # 3. Save
-    with open(output_json, 'w', encoding='utf-8') as f:
-        json.dump(db, f, indent=4, ensure_ascii=False)
+    print("Extracting Word_TAG pairs and generating IPA...")
     
-    print(f"Saved {len(db)} entries to {output_json}")
+    # 2. Iterate through the POS-tagged column (the 3rd column)
+    for row in tqdm(df['pos'].dropna()):
+        # Example row: "ne_UNK en_UNK jatend_NN nam_NN"
+        tokens = row.split()
+        
+        for token in tokens:
+            if "_" not in token:
+                continue
+                
+            # Split into word and tag (e.g., 'nam' and 'NN')
+            word, tag = token.rsplit("_", 1)
+            
+            # Use the G2P to get the base pronunciation
+            ipa_base = g2p.predict(word)
+            
+            # 3. Create POS-aware IPA
+            # We apply tones based on the tag
+            if tag == "V":
+                ipa_final = ipa_base + "˥" # High tone for Verbs
+            elif tag == "NN":
+                ipa_final = ipa_base + "˩" # Low tone for Nouns
+            else:
+                ipa_final = ipa_base         # Neutral for others
+            
+            # Store it exactly as it appears in metadata (e.g., "nam_NN")
+            lexicon[token] = ipa_final
 
-if __name__ == "__main__":
-    # Point this to your existing CSV
-    generate_db_from_csv("data/csv/final_dataset.csv")
+    # 4. Save the dictionary
+    with open(output_json, 'w', encoding='utf-8') as f:
+        json.dump(lexicon, f, indent=4, ensure_ascii=False)
+    
+    print(f"Saved {len(lexicon)} POS-aware entries to {output_json}")
+
+# RUN IT
+generate_g2p_from_metadata("data/csv/tts-metadata.csv")
