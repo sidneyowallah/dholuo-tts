@@ -1,52 +1,8 @@
 import pandas as pd
-import string
 import os
-import torch
-from transformers import pipeline, AutoTokenizer, AutoModelForTokenClassification
 from tqdm import tqdm
+from tagger import Tagger
 
-# ==========================================
-# 1. CONFIGURATION & HARDWARE
-# ==========================================
-INPUT_CSV = "data/csv/final_dataset.csv"             # Path to your DhoNam CSV
-MODEL_PATH = "models/luo-pos"       # Path to your trained POS model
-OUTPUT_METADATA = "data/csv/tts-metadata.csv"     # Final file for TTS training
-CONFIDENCE_THRESHOLD = 80            # Optional: Filter for high-quality audio
-
-# Detect Hardware
-if torch.backends.mps.is_available():
-    device = "mps"
-    print("Using Apple Silicon (MPS) for tagging...")
-elif torch.cuda.is_available():
-    device = 0
-    print("Using Nvidia GPU (CUDA) for tagging...")
-else:
-    device = -1
-    print("Using CPU for tagging...")
-
-# ==========================================
-# 2. INITIALIZE TAGGER (With Warning Fix)
-# ==========================================
-
-print("Loading Dholuo POS model and fixing tokenizer regex...")
-
-# 1. Load the tokenizer explicitly with the suggested fix
-tokenizer = AutoTokenizer.from_pretrained(
-    MODEL_PATH, 
-    fix_mistral_regex=True
-)
-
-# 2. Load the model explicitly
-model = AutoModelForTokenClassification.from_pretrained(MODEL_PATH)
-
-# 3. Pass both to the pipeline
-tagger = pipeline(
-    "token-classification", 
-    model=model, 
-    tokenizer=tokenizer,      # Use the fixed tokenizer here
-    aggregation_strategy="simple", 
-    device=device
-)
 # ==========================================
 # --- Key to Labels (POS Tags):-------
 # NN: Noun (Nying)
@@ -125,139 +81,64 @@ DHOLUO_STOPWORDS = {
     "be": "PART", "bende": "PART", "ni": "PART", "ok": "PART"
 }
 
-def get_pos_enhanced_text(text):
+def get_pos_enhanced_text(text, tagger):
     """
-    Cleans punctuation and adds POS tags to every word.
-    Format: Word|TAG
+    Uses the Tagger class to tag text.
+    Format: Word_TAG
     """
     if not text or pd.isna(text):
         return ""
     
     try:
-        # 1. Clean the raw text to match word-for-word
-        raw_words = text.replace("’", "'").replace("‘", "'").split()
-        tagged_sentence = []
-
-        # Verb prefixes common the UNK list
-        verb_prefixes = ('a', 'i', 'o', 'wa', 'u', 'gi', 'ko')
-        
-        # 2. Run the pipeline on the full text
-        results = tagger(text)
-        
-        # Alignment Logic: We want to match model output back to the original words
-        # A simple way for TTS is to tag the full word based on its first subword
-        for word in raw_words:
-
-            # Clean word for dictionary matching (remove punct, but keep internal ')
-            clean_word = word.strip().lower().translate(str.maketrans('', '', string.punctuation.replace("'", "")))
-
-            # Match word (remove ' for model token alignment i.e ng' to ng)
-            match_word = clean_word.replace("'", "")
-
-            if not match_word: continue
-                
-            tag = "UNK"
-            for res in results:
-                model_token = res['word'].replace(" ", "").replace("'", "").lower()
-                if model_token in match_word or match_word in model_token:
-                    tag = res['entity_group']
-                    break
-            
-            # --- FALLBACK LOGIC ---
-            if tag == "UNK":
-                # 1. Dictionary Check
-                if clean_word in DHOLUO_STOPWORDS or match_word in DHOLUO_STOPWORDS:
-                    tag = DHOLUO_STOPWORDS.get(clean_word, DHOLUO_STOPWORDS.get(match_word))
-                
-                # 2. "-RUOK" Suffix (Always Nouns) - e.g., tudruok, dongruok, dusruok
-                elif clean_word.endswith("ruok"):
-                    tag = "NN"
-
-                # 3. "KO-" Prefix (Often Infinitive Verbs) - e.g., kowuok, kongo (verb sense)
-                elif clean_word.startswith("ko") and len(clean_word) > 4:
-                    tag = "V"
-                
-                # 4. "JO-" Prefix (People Nouns)
-                elif clean_word.startswith("jo"):
-                    tag = "NN"
-                
-                # 5. "MA-" Prefix (Adjectives)
-                elif clean_word.startswith("ma") and len(clean_word) > 3:
-                    tag = "ADJ"
-
-                # 6. Subject Verb Conjugation (a-, wa-, etc.)
-                elif clean_word.startswith(verb_prefixes) and (clean_word.endswith("o") or len(clean_word) > 4):
-                    tag = "V"
-
-                # 7. Catch 'ne', 'en', 'gi', 'ng'a'
-                elif len(clean_word) <= 2:
-                    tag = "PRON" # Catch 'ne', 'en', 'gi', 'ng'a'
-                    
-                # # 8. Final safety fallback
-                # else:
-                #     tag = "NN"  
-            
-            tagged_sentence.append(f"{clean_word}_{tag}")
-        
-        return " ".join(tagged_sentence)
-    
-    except Exception as e:
-        # If a specific sentence fails, return empty to be filtered later
+        tagged_pairs = tagger.tag(text)
+        return " ".join([f"{word}_{tag}" for word, tag in tagged_pairs])
+    except Exception:
         return ""
 
-# ==========================================
-# 3. LOAD & FILTER DATASET
-# ==========================================
-print(f"Reading {INPUT_CSV}...")
-df = pd.read_csv(INPUT_CSV)
+def main():
+    # ==========================================
+    # 1. CONFIGURATION
+    # ==========================================
+    INPUT_CSV = "data/csv/final_dataset.csv"
+    MODEL_PATH = "models/luo-pos"
+    OUTPUT_METADATA = "data/csv/tts-metadata.csv"
+    CONFIDENCE_THRESHOLD = 80
 
-# Apply Confidence Filter
-initial_count = len(df)
-df = df[df['confidence'] >= CONFIDENCE_THRESHOLD]
-filtered_count = len(df)
+    # ==========================================
+    # 2. INITIALIZE TAGGER
+    # ==========================================
+    print("Loading Dholuo POS tagger...")
+    tagger = Tagger(model_path=MODEL_PATH)
 
-print(f"Filtered out {initial_count - filtered_count} rows with confidence < {CONFIDENCE_THRESHOLD}.")
-print(f"Remaining rows to process: {filtered_count}")
+    # ==========================================
+    # 3. LOAD & FILTER DATASET
+    # ==========================================
+    print(f"Reading {INPUT_CSV}...")
+    df = pd.read_csv(INPUT_CSV)
 
-# ==========================================
-# 4. DATA TRANSFORMATION (LJSpeech Format)
-# ==========================================
-# Enable progress bar for the tagging process
-tqdm.pandas()
+    # Apply Confidence Filter
+    if CONFIDENCE_THRESHOLD:
+        df = df[df['confidence'] >= CONFIDENCE_THRESHOLD]
+        print(f"Filtered to {len(df)} high-confidence samples (>={CONFIDENCE_THRESHOLD}%)")
 
-print("Generating POS tags (this may take a few minutes)...")
-# Create the 3 columns required for TTS
-# 1. audio_id (filename without .wav)
-df['audio_id'] = df['audio_name'].str.replace('.wav', '', regex=False)
+    # ==========================================
+    # 4. APPLY POS TAGGING
+    # ==========================================
+    print("Applying POS tags to transcripts...")
+    tqdm.pandas(desc="Tagging")
+    df['pos_tagged'] = df['transcript'].progress_apply(lambda x: get_pos_enhanced_text(x, tagger))
 
-# 2. raw_text (The original transcription with punctuation)
-df['raw_text'] = df['transcription']
+    # Remove failed rows
+    df = df[df['pos_tagged'].str.len() > 0]
+    print(f"Successfully tagged {len(df)} samples")
 
-# 3. pos_text (The normalized text with POS tags)
-df['pos_text'] = df['transcription'].progress_apply(get_pos_enhanced_text)
+    # ==========================================
+    # 5. SAVE METADATA
+    # ==========================================
+    output_df = df[['audio_file', 'transcript', 'pos_tagged']]
+    output_df.to_csv(OUTPUT_METADATA, sep='|', header=False, index=False)
+    print(f"\nSaved TTS metadata to {OUTPUT_METADATA}")
+    print(f"Format: audio_file|transcript|pos_tagged")
 
-# Final cleanup: Remove any rows where POS tagging failed
-df = df[df['pos_text'] != ""]
-
-# ==========================================
-# 5. EXPORT
-# ==========================================
-# LJSpeech format: ID | Raw Text | Tagged Text
-# We use the '|' separator which is standard for TTS
-final_metadata = df[['audio_id', 'raw_text', 'pos_text']]
-
-# Save to CSV
-final_metadata.to_csv(
-    OUTPUT_METADATA, 
-    sep="|", 
-    index=False, 
-    header=False, 
-    quoting=3,            # ensure quoting is turned OFF
-    escapechar="\\"       # If a pipe ever appears in the text, it will be written as \|
-)
-
-print(f"\nSUCCESS!")
-print(f"Final dataset contains {len(final_metadata)} pairs.")
-print(f"File saved as: {OUTPUT_METADATA}")
-print("-" * 30)
-print("Next step: Move 'metadata.csv' and your '.wav' files into your TTS training folder.")
+if __name__ == "__main__":
+    main()
