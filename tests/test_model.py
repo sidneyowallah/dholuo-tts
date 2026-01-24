@@ -43,12 +43,13 @@ class GraphemeToPhonemeConverter:
 # ==========================================
 # 2. CONFIGURATION & PATHS
 # ==========================================
+CHECKPOINT_NAME = "checkpoint_160000"
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 POS_MODEL_PATH = os.path.join(PROJECT_ROOT, "models/luo-pos")
-TTS_MODEL_PATH = os.path.join(PROJECT_ROOT, "models/luo-tts/v13/checkpoint_130000.pth")
-TTS_CONFIG_PATH = os.path.join(PROJECT_ROOT, "models/luo-tts/v13/config.json")
+TTS_MODEL_PATH = os.path.join(PROJECT_ROOT, f"models/luo-tts/{CHECKPOINT_NAME}.pth")
+TTS_CONFIG_PATH = os.path.join(PROJECT_ROOT, "models/luo-tts/config.json")
 LEXICON_PATH = os.path.join(PROJECT_ROOT, "data/dholuo_lexicon.json")
-GENERATED_AUDIO_OUTPUT = os.path.join(PROJECT_ROOT, "tests/output/model_output_audio.wav")
+GENERATED_AUDIO_OUTPUT = os.path.join(PROJECT_ROOT, f"tests/output/{CHECKPOINT_NAME}_audio.wav")
 
 # ==========================================
 # 3. MODEL CLASSES (Matching Train Script)
@@ -149,5 +150,6 @@ class DholuoTTS:
 
 if __name__ == "__main__":
     dho_tts = DholuoTTS()
-    text = input("Enter Dholuo text: ")
+    # text = input("Enter Dholuo text: ")
+    text = "kodhi manigi rieko mar ng'iyo piny nyalo geng'o oro gik ma nyalo ketho piny kod lokruok matimore e alwora"
     dho_tts.speak(text)
