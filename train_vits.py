@@ -3,7 +3,6 @@ import sys
 import torch
 import torchaudio
 import soundfile as sf
-import json
 
 # ======================================================
 # 1. AUDIO PATCH (Bypass torchcodec)
@@ -33,7 +32,7 @@ from TTS.tts.datasets import load_tts_samples
 from TTS.tts.models.vits import Vits
 from TTS.tts.utils.text.tokenizer import TTSTokenizer
 from TTS.tts.utils.text import cleaners
-from TTS.utils.audio import AudioProcessor # <--- NEW IMPORT
+from TTS.utils.audio import AudioProcessor
 
 # ======================================================
 # 3. UTILS & CUSTOM CLASS
@@ -118,7 +117,7 @@ train_samples, eval_samples = load_tts_samples(
 print("🔧 Initializing Model and Audio Processor...")
 model = DholuoVits(config)
 
-# THE FIX: Manually create the AudioProcessor and attach it to the model
+# Manually create the AudioProcessor and attach it to the model
 # This allows the model to calculate spectrograms for logging
 ap = AudioProcessor(**audio_params)
 model.ap = ap 
