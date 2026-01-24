@@ -22,6 +22,12 @@ This repository contains a complete pipeline for building a high-fidelity, natur
 - **Custom Dholuo G2P**
   A specialized phonemizer that handles Dholuo-specific digraphs (`ny`, `ng'`, `th`, `dh`) and ATR vowel harmony.
 
+- **Modular Architecture**
+  Separated concerns with dedicated modules: `phonemizer.py` for G2P, `tagger.py` for POS tagging, and `utils.py` for shared utilities.
+
+- **Comprehensive Testing**
+  Full test suite covering unit tests, integration tests, and end-to-end pipeline validation.
+
 - **End-to-End VITS**
   Training on the state-of-the-art **VITS** (Variational Inference with adversarial learning for end-to-end Text-to-Speech) architecture.
 
@@ -57,8 +63,6 @@ graph TD
     M --> N((Final Dholuo Speech))
 
     style N fill:#f96,stroke:#333,stroke-width:4px
-    style E fill:#bbf,stroke:#333
-    style I fill:#bbf,stroke:#333
 ```
 
 ### NLP Phase
@@ -81,6 +85,32 @@ graph TD
 
 ---
 
+## 📁 Project Structure
+
+```
+dholuo_tts/
+├── phonemizer.py          # G2P converter with tone injection
+├── tagger.py              # POS tagging with AfroXLMR
+├── utils.py               # Shared utilities and custom VITS model
+├── generate_lexicon.py    # Bulk IPA lexicon generator
+├── preprocess_dhonam.py   # Audio preprocessing pipeline
+├── train_vits.py          # VITS training script
+├── tests/                 # Comprehensive test suite
+│   ├── test_phonemizer.py
+│   ├── test_integration.py
+│   ├── test_phonemizer_with_tagger.py
+│   ├── test_model.py      # End-to-end TTS inference test
+│   └── output/            # Generated test audio files
+├── data/
+│   ├── dholuo_lexicon.json  # POS-aware IPA dictionary
+│   └── csv/                 # Training metadata
+└── models/
+    ├── luo-pos/             # Fine-tuned POS tagger
+    └── luo-tts/             # VITS checkpoints
+```
+
+---
+
 ## 🚀 Getting Started
 
 ### 🔧 Installation & Setup
@@ -95,7 +125,13 @@ sudo apt-get update && sudo apt-get install espeak-ng -y
 
 #### 2. Python Environment
 
-Install required Python packages:
+Install required Python packages using `uv`:
+
+```bash
+uv sync
+```
+
+Or with pip:
 
 ```bash
 pip install TTS pandas transformers accelerate torchaudio tqdm
@@ -110,7 +146,8 @@ pip install TTS pandas transformers accelerate torchaudio tqdm
 Fine-tune the `Davlan/afro-xlmr-large-76L` model using the **KenPOS** dataset (`dh.parquet`).
 
 ```bash
-python train_pos_tagger.py
+uv run train_pos_local.py   # For local training
+uv run train_pos_cloud.py   # For cloud training
 ```
 
 ### Phase 2: Metadata Preprocessing
@@ -118,8 +155,8 @@ python train_pos_tagger.py
 Transcribe the DhoNam audio files and apply POS tags to create the training metadata.
 
 ```bash
-python transcribe_audio.py
-python pos_tagging.py
+uv run transcribe_audio.py
+uv run preprocess_dhonam.py
 ```
 
 ### Phase 3: Lexicon Generation
@@ -127,15 +164,102 @@ python pos_tagging.py
 Generate the IPA phonetic dictionary with POS-aware tone markers.
 
 ```bash
-python generate_lexicon.py
+uv run generate_lexicon.py
 ```
 
-### Phase 4: VITS Training
+This creates `data/dholuo_lexicon.json` with entries like:
+
+```json
+{
+  "nam_NN": "nam˩",
+  "ringo_V": "ɾiŋgɔ˥",
+  "dho_NN": "ðɔ˩"
+}
+```
+
+### Phase 4: VITS Metadata Creation
+
+Convert POS-tagged metadata to IPA phonemes for VITS training.
+
+```bash
+uv run create_vits_metadata.py
+```
+
+### Phase 5: VITS Training
 
 Train the acoustic model on an NVIDIA GPU.
 
 ```bash
 python train_vits.py
+```
+
+---
+
+## 🧪 Testing
+
+Run the comprehensive test suite:
+
+```bash
+# Test phonemizer G2P and tone injection
+uv run python tests/test_phonemizer.py
+
+# Test integration with tagged pairs
+uv run python tests/test_integration.py
+
+# Test end-to-end with mock tagger
+uv run python tests/test_phonemizer_with_tagger.py
+
+# Test full TTS model inference
+uv run python tests/test_model.py
+```
+
+---
+
+## 🔧 Module Usage
+
+### Phonemizer
+
+```python
+from phonemizer import Phonemizer
+
+# Initialize without tagger for direct phonemization
+p = Phonemizer(tagger=False)
+
+# Convert word with POS tag to IPA
+ipa = p.phonemize("dho", "NN")  # Returns: "ðɔ˩"
+
+# Process tagged pairs
+tagged = [("nyithindo", "NN"), ("ringo", "V")]
+result = p.phonemize_tagged_pairs(tagged)  # Returns: "ɲiθindɔ˩ ɾiŋgɔ˥"
+```
+
+### Tagger
+
+```python
+from tagger import Tagger
+
+# Initialize POS tagger
+tagger = Tagger()
+
+# Tag raw text
+tagged_pairs = tagger.tag("Nyithindo ringo e dala")
+# Returns: [("nyithindo", "NN"), ("ringo", "V"), ("e", "P"), ("dala", "NN")]
+```
+
+### End-to-End Pipeline
+
+```python
+from phonemizer import Phonemizer
+from tagger import Tagger
+
+# Initialize components
+tagger = Tagger()
+phoneme = Phonemizer(tagger=tagger)
+
+# Process raw text to IPA
+text = "Nyithindo ringo e dala"
+ipa_output = phoneme.phonemize_text(text)
+print(ipa_output)  # "ɲiθindɔ˩ ɾiŋgɔ˥ ɛ dala˩"
 ```
 
 ---
@@ -156,4 +280,3 @@ This project is licensed under the **MIT License** — see the `LICENSE` file fo
 
 **Author:** Sidney Owallah
 **Collaborators:** Trained on RunPod RTX A5000
-**Language:** Dholuo (Luo)
