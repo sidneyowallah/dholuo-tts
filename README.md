@@ -22,11 +22,14 @@ This repository contains a complete pipeline for building a high-fidelity, natur
 - **Custom Dholuo G2P**
   A specialized phonemizer that handles Dholuo-specific digraphs (`ny`, `ng'`, `th`, `dh`) and ATR vowel harmony.
 
+- **Gender-Specific Voice Models**
+  Separate training pipelines for male and female voices, with automatic dataset splitting by speaker gender.
+
 - **Modular Architecture**
   Separated concerns with dedicated modules: `phonemizer.py` for G2P, `tagger.py` for POS tagging, and `utils.py` for shared utilities.
 
 - **Comprehensive Testing**
-  Full test suite covering unit tests, integration tests, and end-to-end pipeline validation.
+  Full test suite covering unit tests, integration tests, and end-to-end pipeline validation with gender-specific model testing.
 
 - **End-to-End VITS**
   Training on the state-of-the-art **VITS** (Variational Inference with adversarial learning for end-to-end Text-to-Speech) architecture.
@@ -94,6 +97,7 @@ dholuo_tts/
 ├── utils.py               # Shared utilities and custom VITS model
 ├── generate_lexicon.py    # Bulk IPA lexicon generator
 ├── preprocess_dhonam.py   # Audio preprocessing pipeline
+├── split_by_gender.py     # Split dataset by speaker gender
 ├── train_vits.py          # VITS training script
 ├── tests/                 # Comprehensive test suite
 │   ├── test_phonemizer.py
@@ -103,10 +107,20 @@ dholuo_tts/
 │   └── output/            # Generated test audio files
 ├── data/
 │   ├── dholuo_lexicon.json  # POS-aware IPA dictionary
-│   └── csv/                 # Training metadata
+│   ├── audio/
+│   │   ├── wav/           # All audio files
+│   │   ├── wav_male/      # Male speaker audio
+│   │   └── wav_female/    # Female speaker audio
+│   └── csv/
+│       ├── users-meta.csv              # Speaker gender metadata
+│       ├── train_metadata.csv          # Combined training metadata
+│       ├── male_training_metadata.csv  # Male-specific metadata
+│       └── female_training_metadata.csv # Female-specific metadata
 └── models/
     ├── luo-pos/             # Fine-tuned POS tagger
-    └── luo-tts/             # VITS checkpoints
+    └── luo-tts/
+        ├── male/            # Male voice checkpoints
+        └── female/          # Female voice checkpoints
 ```
 
 ---
@@ -185,12 +199,28 @@ Convert POS-tagged metadata to IPA phonemes for VITS training.
 uv run create_vits_metadata.py
 ```
 
-### Phase 5: VITS Training
+### Phase 5: Gender-Based Dataset Splitting
 
-Train the acoustic model on an NVIDIA GPU.
+Split the dataset by speaker gender for training separate voice models.
 
 ```bash
-python train_vits.py
+uv run split_by_gender.py
+```
+
+This creates:
+- `data/audio/wav_male/` and `data/audio/wav_female/` directories
+- `male_training_metadata.csv` and `female_training_metadata.csv` files
+
+### Phase 6: VITS Training
+
+Train gender-specific acoustic models on an NVIDIA GPU.
+
+```bash
+# Train female voice model
+python train_vits.py --gender female
+
+# Train male voice model
+python train_vits.py --gender male
 ```
 
 ---
@@ -209,9 +239,11 @@ uv run python tests/test_integration.py
 # Test end-to-end with mock tagger
 uv run python tests/test_phonemizer_with_tagger.py
 
-# Test full TTS model inference
+# Test full TTS model inference (configurable for gender/checkpoint)
 uv run python tests/test_model.py
 ```
+
+The test_model.py script can be configured to test different checkpoints and genders by modifying the GENDER and CHECKPOINT_NAME variables at the top of the file.
 
 ---
 

@@ -43,13 +43,10 @@ class GraphemeToPhonemeConverter:
 # ==========================================
 # 2. CONFIGURATION & PATHS
 # ==========================================
-CHECKPOINT_NAME = "checkpoint_160000"
+CHECKPOINT_NAME = "checkpoint_150000"
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 POS_MODEL_PATH = os.path.join(PROJECT_ROOT, "models/luo-pos")
-TTS_MODEL_PATH = os.path.join(PROJECT_ROOT, f"models/luo-tts/{CHECKPOINT_NAME}.pth")
-TTS_CONFIG_PATH = os.path.join(PROJECT_ROOT, "models/luo-tts/config.json")
 LEXICON_PATH = os.path.join(PROJECT_ROOT, "data/dholuo_lexicon.json")
-GENERATED_AUDIO_OUTPUT = os.path.join(PROJECT_ROOT, f"tests/output/{CHECKPOINT_NAME}_audio.wav")
 
 # ==========================================
 # 3. MODEL CLASSES (Matching Train Script)
@@ -71,9 +68,14 @@ def intersperse(lst, item):
     return result
 
 class DholuoTTS:
-    def __init__(self):
+    def __init__(self, gender="female"):
         print("🚀 Initializing POS-Aware Dholuo TTS...")
         self.device = "mps" if torch.backends.mps.is_available() else "cpu"
+        self.gender = gender
+        
+        TTS_MODEL_PATH = os.path.join(PROJECT_ROOT, f"models/luo-tts/{gender}/{CHECKPOINT_NAME}.pth")
+        TTS_CONFIG_PATH = os.path.join(PROJECT_ROOT, f"models/luo-tts/{gender}/config.json")
+        self.output_path = os.path.join(PROJECT_ROOT, f"tests/output/{CHECKPOINT_NAME}_{gender}_audio.wav")
         
         # Initialize NLP
         self.tagger = Tagger(model_path=POS_MODEL_PATH)
@@ -122,7 +124,10 @@ class DholuoTTS:
             ipa_list.append(ipa)
         return " ".join(ipa_list)
 
-    def speak(self, text, output_file=GENERATED_AUDIO_OUTPUT):
+    def speak(self, text, output_file=None):
+        if output_file is None:
+            output_file = self.output_path
+        print(f"Input Text: {text}")
         ipa_string = self.text_to_ipa(text)
         print(f"Synthesizing: {ipa_string}")
         
@@ -149,7 +154,13 @@ class DholuoTTS:
         print(f"✅ Success! Generated {output_file}")
 
 if __name__ == "__main__":
-    dho_tts = DholuoTTS()
-    # text = input("Enter Dholuo text: ")
-    text = "kodhi manigi rieko mar ng'iyo piny nyalo geng'o oro gik ma nyalo ketho piny kod lokruok matimore e alwora"
+    text = input("Enter Dholuo text (or press Enter for default): ").strip()
+    if not text:
+        text = "japuonj morwa mar bayoloji ne olero kaka ler loso gik moko ka itiyo gi picha ma oting'o weche mathoth"
+    
+    gender = input("Enter gender (male/female, default: female): ").strip().lower()
+    if gender not in ["male", "female"]:
+        gender = "female"
+    
+    dho_tts = DholuoTTS(gender=gender)
     dho_tts.speak(text)

@@ -1,4 +1,5 @@
 import os
+import shutil
 import pandas as pd
 import torch
 import librosa
@@ -9,11 +10,53 @@ from transformers import AutoProcessor, AutoModelForCTC
 # =================CONFIGURATION=================
 AUDIO_FOLDER = "data/audio/webm/"
 WAV_OUTPUT_FOLDER = "data/audio/wav/"
+WAV_MALE_FOLDER = "data/audio/wav_male/"
+WAV_FEMALE_FOLDER = "data/audio/wav_female/"
 MODEL_ID = "CLEAR-Global/w2v-bert-2.0-luo_cv_fleurs_19h"
 TTS_SAMPLE_RATE = 22050  # Best for TTS
 ASR_SAMPLE_RATE = 16000  # Required for ASR Model
-OUTPUT_CSV = "data/csv/transcribed_dataset.csv"
+OUTPUT_CSV = "data/csv/final_dataset.csv"
+MALE_CSV = "data/csv/male_dataset.csv"
+FEMALE_CSV = "data/csv/female_dataset.csv"
 # ===============================================
+
+def split_by_gender(df):
+    """Split audio files and metadata by speaker gender"""
+    print("\nSplitting dataset by gender...")
+    
+    os.makedirs(WAV_MALE_FOLDER, exist_ok=True)
+    os.makedirs(WAV_FEMALE_FOLDER, exist_ok=True)
+    
+    # Split dataframes
+    df_male = df[df['gender'] == 'male_masculine'].copy()
+    df_female = df[df['gender'] == 'female_feminine'].copy()
+    
+    df_male.to_csv(MALE_CSV, index=False)
+    df_female.to_csv(FEMALE_CSV, index=False)
+    print(f"CSV split - Male: {len(df_male)} rows, Female: {len(df_female)} rows")
+    
+    # Split audio files
+    gender_map = dict(zip(df['user_id'], df['gender']))
+    male_count = female_count = skipped = 0
+    
+    for filename in tqdm(os.listdir(WAV_OUTPUT_FOLDER), desc="Copying audio"):
+        if not filename.endswith('.wav'):
+            continue
+        
+        user_id = filename.rsplit('-', 1)[0]
+        gender = gender_map.get(user_id)
+        src = os.path.join(WAV_OUTPUT_FOLDER, filename)
+        
+        if gender == 'male_masculine':
+            shutil.copy2(src, os.path.join(WAV_MALE_FOLDER, filename))
+            male_count += 1
+        elif gender == 'female_feminine':
+            shutil.copy2(src, os.path.join(WAV_FEMALE_FOLDER, filename))
+            female_count += 1
+        else:
+            skipped += 1
+    
+    print(f"Audio split - Male: {male_count}, Female: {female_count}, Skipped: {skipped}")
 
 def main():
     device = "mps" if torch.backends.mps.is_available() else "cuda" if torch.cuda.is_available() else "cpu"
@@ -55,15 +98,17 @@ def main():
             transcriptions.append(f"ERROR: {e}")
 
     df['transcription'] = transcriptions
-    df['audio_id'] = df['audio_name'].str.replace('.webm', '', regex=False)
     
     # Cleanup
-    cols_to_drop = ['audio_url', 'reviewer_id', 'decision', 'notes', 'time_spent']
+    cols_to_drop = ['audio_url', 'reviewer_id', 'decision', 'notes', 'time_spent', 'audio_id']
     df = df.drop(columns=cols_to_drop, errors='ignore')
     df['audio_name'] = df['audio_name'].str.replace('.webm', '.wav', regex=False)
     
     df.to_csv(OUTPUT_CSV, index=False)
     print(f"Transcription complete. Saved to {OUTPUT_CSV}")
+    
+    # Split by gender
+    split_by_gender(df)
 
 if __name__ == "__main__":
     main()
