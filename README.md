@@ -96,8 +96,9 @@ dholuo_tts/
 ├── tagger.py              # POS tagging with AfroXLMR
 ├── utils.py               # Shared utilities and custom VITS model
 ├── generate_lexicon.py    # Bulk IPA lexicon generator
-├── preprocess_dhonam.py   # Audio preprocessing pipeline
-├── split_by_gender.py     # Split dataset by speaker gender
+├── transcribe_audio.py    # Audio transcription & gender splitting
+├── preprocess_dhonam.py   # POS tagging pipeline
+├── create_vits_metadata.py # IPA conversion & metadata generation
 ├── train_vits.py          # VITS training script
 ├── tests/                 # Comprehensive test suite
 │   ├── test_phonemizer.py
@@ -113,6 +114,10 @@ dholuo_tts/
 │   │   └── wav_female/    # Female speaker audio
 │   └── csv/
 │       ├── users-meta.csv              # Speaker gender metadata
+│       ├── final_dataset.csv           # Combined transcribed dataset
+│       ├── male_dataset.csv            # Male transcriptions
+│       ├── female_dataset.csv          # Female transcriptions
+│       ├── tts-metadata.csv            # POS-tagged metadata
 │       ├── train_metadata.csv          # Combined training metadata
 │       ├── male_training_metadata.csv  # Male-specific metadata
 │       └── female_training_metadata.csv # Female-specific metadata
@@ -164,14 +169,29 @@ uv run train_pos_local.py   # For local training
 uv run train_pos_cloud.py   # For cloud training
 ```
 
-### Phase 2: Metadata Preprocessing
+### Phase 2: Audio Transcription & Gender Splitting
 
-Transcribe the DhoNam audio files and apply POS tags to create the training metadata.
+Transcribe the DhoNam audio files and automatically split by gender.
 
 ```bash
 uv run transcribe_audio.py
+```
+
+This creates:
+
+- `final_dataset.csv` - Combined transcriptions with metadata
+- `male_dataset.csv` / `female_dataset.csv` - Gender-specific transcriptions
+- `wav_male/` / `wav_female/` - Gender-specific audio folders
+
+### Phase 3: POS Tagging
+
+Apply POS tags to transcriptions.
+
+```bash
 uv run preprocess_dhonam.py
 ```
+
+Creates `tts-metadata.csv` with format: `audio_file|transcript|pos_tagged`
 
 ### Phase 3: Lexicon Generation
 
@@ -193,25 +213,19 @@ This creates `data/dholuo_lexicon.json` with entries like:
 
 ### Phase 4: VITS Metadata Creation
 
-Convert POS-tagged metadata to IPA phonemes for VITS training.
+Convert POS-tagged metadata to IPA phonemes and split by gender.
 
 ```bash
 uv run create_vits_metadata.py
 ```
 
-### Phase 5: Gender-Based Dataset Splitting
-
-Split the dataset by speaker gender for training separate voice models.
-
-```bash
-uv run split_by_gender.py
-```
-
 This creates:
-- `data/audio/wav_male/` and `data/audio/wav_female/` directories
-- `male_training_metadata.csv` and `female_training_metadata.csv` files
 
-### Phase 6: VITS Training
+- `train_metadata.csv` - Combined IPA phoneme metadata
+- `male_training_metadata.csv` - Male-specific training data
+- `female_training_metadata.csv` - Female-specific training data
+
+### Phase 5: VITS Training
 
 Train gender-specific acoustic models on an NVIDIA GPU.
 
@@ -239,11 +253,15 @@ uv run python tests/test_integration.py
 # Test end-to-end with mock tagger
 uv run python tests/test_phonemizer_with_tagger.py
 
-# Test full TTS model inference (configurable for gender/checkpoint)
+# Test full TTS model inference with interactive prompts
 uv run python tests/test_model.py
 ```
 
-The test_model.py script can be configured to test different checkpoints and genders by modifying the GENDER and CHECKPOINT_NAME variables at the top of the file.
+The test_model.py script supports:
+
+- Interactive text input (or uses default Dholuo sentence)
+- Gender selection (male/female) at runtime
+- Configurable checkpoint by modifying the CHECKPOINT_NAME variable
 
 ---
 
@@ -298,9 +316,9 @@ print(ipa_output)  # "ɲiθindɔ˩ ɾiŋgɔ˥ ɛ dala˩"
 
 ## 📂 Dataset Credits
 
-- **KenPOS**: Dholuo Part-of-Speech dataset (locally stored as `dh.parquet`).
-- **DhoNam**: Dholuo Speech dataset used for ASR and TTS training.
-- **AfroXLMR**: Pre-trained multilingual model by Davlan, used as the backbone for Nilotic NLP tasks.
+- **[KenPOS](https://huggingface.co/datasets/Kencorpus/KenPOS)**: Dholuo Part-of-Speech dataset (locally stored as `dh.parquet`).
+- **[DhoNam](https://datacollective.mozillafoundation.org/datasets/cmjepxo6t08nmmk07iauvua6v)**: Dholuo Speech dataset used for ASR and TTS training.
+- **[AfroXLMR](https://huggingface.co/Davlan/afro-xlmr-large)**: Pre-trained multilingual model by Davlan, used as the backbone for Nilotic NLP tasks.
 
 ---
 
@@ -309,6 +327,3 @@ print(ipa_output)  # "ɲiθindɔ˩ ɾiŋgɔ˥ ɛ dala˩"
 This project is licensed under the **MIT License** — see the `LICENSE` file for details.
 
 ---
-
-**Author:** Sidney Owallah
-**Collaborators:** Trained on RunPod RTX A5000
