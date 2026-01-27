@@ -1,3 +1,4 @@
+import os
 import string
 import torch
 from transformers import pipeline, AutoTokenizer, AutoModelForTokenClassification
@@ -63,8 +64,19 @@ DHOLUO_STOPWORDS = {
 class Tagger:
     def __init__(self, model_path="models/luo-pos", base_model="Davlan/afro-xlmr-large-76L"):
         self.device = "mps" if torch.backends.mps.is_available() else "cpu"
+        
+        # Determine if model_path is local or on hub
+        if not os.path.exists(model_path):
+            # Fallback to Hub if local path doesn't exist
+            hub_path = "sowallah/dholuo-tts-models"
+            print(f"📥 Loading POS model from Hub: {hub_path}/luo-pos")
+            model_path = f"{hub_path}" # transformers will try subfolders
+            # Use specific subfolder loading logic
+            model = AutoModelForTokenClassification.from_pretrained(hub_path, subfolder="luo-pos")
+        else:
+            model = AutoModelForTokenClassification.from_pretrained(model_path)
+            
         tokenizer = AutoTokenizer.from_pretrained(base_model)
-        model = AutoModelForTokenClassification.from_pretrained(model_path)
         
         self.tagger_pipe = pipeline(
             "token-classification", 

@@ -5,7 +5,7 @@
 ![TTS](https://img.shields.io/badge/TTS-VITS-orange.svg)
 ![NLP](https://img.shields.io/badge/NLP-AfroXLMR-purple.svg)
 ![GPU](https://img.shields.io/badge/GPU-RTX%20A5000-76B900.svg)
-![Status](https://img.shields.io/badge/status-Training-yellow.svg)
+![Status](https://img.shields.io/badge/status-Active-brightgreen.svg)
 
 This repository contains a complete pipeline for building a high-fidelity, natural-sounding Text-to-Speech (TTS) system for the **Dholuo** language. Unlike standard multilingual TTS, this system uses a **Part-of-Speech (POS) aware G2P (Grapheme-to-Phoneme)** approach to solve the problem of homograph disambiguation and tonal accuracy.
 
@@ -33,6 +33,18 @@ This repository contains a complete pipeline for building a high-fidelity, natur
 
 - **End-to-End VITS**
   Training on the state-of-the-art **VITS** (Variational Inference with adversarial learning for end-to-end Text-to-Speech) architecture.
+
+- **Interactive Demo**
+  Beautiful Gradio-based interface for live testing with waveform and spectrogram visualizations.
+
+- **Production-Ready API**
+  FastAPI backend with Redis caching and Nginx reverse proxy.
+
+- **Dockerized Deployment**
+  Simple deployment using Docker and Docker Compose.
+
+- **Hugging Face Integration**
+  Automatic model downloading from the [Hugging Face Hub](https://huggingface.co/sowallah/dholuo-tts-models).
 
 ---
 
@@ -92,6 +104,22 @@ graph TD
 
 ```
 dholuo_tts/
+├── api/                   # FastAPI backend services
+│   ├── main.py            # API entry point
+│   ├── routes.py          # API endpoints
+│   └── cache.py           # Redis caching logic
+├── demo/                  # Gradio web interface
+│   ├── app.py             # Demo entry point
+│   ├── components.py      # UI components
+│   └── visualizations.py  # Waveform/Spectrogram plots
+├── docker/                # Deployment configurations
+│   ├── Dockerfile         # API Dockerfile
+│   ├── Dockerfile.demo    # Demo Dockerfile
+│   └── docker-compose.yml # Full stack orchestration
+├── scripts/               # Utility and launch scripts
+│   ├── launch_demo.sh     # Quick start script (Local/Docker)
+│   ├── verify_demo.py     # End-to-end pipeline verification
+│   └── upload_models_to_hub.py # HF Hub synchronization
 ├── phonemizer.py          # G2P converter with tone injection
 ├── tagger.py              # POS tagging with AfroXLMR
 ├── utils.py               # Shared utilities and custom VITS model
@@ -262,6 +290,39 @@ The test_model.py script supports:
 - Interactive text input (or uses default Dholuo sentence)
 - Gender selection (male/female) at runtime
 - Configurable checkpoint by modifying the CHECKPOINT_NAME variable
+
+---
+
+## 🎤 Running the Demo
+
+The easiest way to experience the Dholuo TTS system is through the interactive Gradio demo.
+
+### Local Launch
+
+```bash
+./scripts/launch_demo.sh local
+```
+
+The demo will be available at `http://localhost:7860`. Models will be automatically downloaded from Hugging Face if not found locally.
+
+### Docker Launch
+
+```bash
+./scripts/launch_demo.sh docker
+```
+
+---
+
+## 🌐 API Deployment
+
+For production use, you can deploy the full stack (API + Redis + Nginx) using Docker Compose.
+
+```bash
+docker-compose -f docker/docker-compose.yml up --build
+```
+
+- **API Documentation**: `http://localhost:8000/docs`
+- **Nginx Proxy**: `http://localhost:80`
 
 ---
 

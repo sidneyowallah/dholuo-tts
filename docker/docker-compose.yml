@@ -1,0 +1,43 @@
+version: '3.8'
+
+services:
+  api:
+    build:
+      context: ../
+      dockerfile: docker/Dockerfile
+    container_name: dholuo-tts-api
+    ports:
+      - "8000:8000"
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    volumes:
+      - ../models:/app/models
+    depends_on:
+      - redis
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+    restart: always
+
+  redis:
+    image: redis:alpine
+    container_name: dholuo-tts-redis
+    ports:
+      - "6379:6379"
+    restart: always
+
+  nginx:
+    image: nginx:latest
+    container_name: dholuo-tts-nginx
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - api
+    restart: always

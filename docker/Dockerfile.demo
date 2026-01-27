@@ -1,0 +1,28 @@
+# docker/Dockerfile.demo
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install system dependencies
+# libsndfile1 for audio
+# espeak-ng for phonemization
+# cargo/rustc for sudachipy (coqui-tts dependency)
+RUN apt-get update && apt-get install -y \
+    libsndfile1 espeak-ng git build-essential \
+    rustc cargo \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy all files (filtered by .dockerignore)
+COPY . /app
+
+# Install dependencies including 'demo' extra
+RUN pip install --no-cache-dir ".[demo]"
+
+# Environment
+ENV GRADIO_SERVER_NAME=0.0.0.0
+ENV GRADIO_SERVER_PORT=7860
+ENV PYTHONPATH=/app
+
+EXPOSE 7860
+
+CMD ["python", "-m", "demo.app"]

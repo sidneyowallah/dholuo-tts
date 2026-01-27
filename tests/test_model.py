@@ -43,7 +43,7 @@ class GraphemeToPhonemeConverter:
 # ==========================================
 # 2. CONFIGURATION & PATHS
 # ==========================================
-CHECKPOINT_NAME = "checkpoint_150000"
+CHECKPOINT_NAME = "checkpoint_180000"
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 POS_MODEL_PATH = os.path.join(PROJECT_ROOT, "models/luo-pos")
 LEXICON_PATH = os.path.join(PROJECT_ROOT, "data/dholuo_lexicon.json")

@@ -1,0 +1,54 @@
+# .dockerignore
+
+# Git & IDE
+.git
+.vscode
+.idea
+.DS_Store
+
+# Python
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+.tox/
+.coverage
+.coverage.*
+.cache
+pip-log.txt
+
+# Outputs
+tests/output/
+*.wav
+*.mp3
+*.zip
+
+# --- Data Exclusions ---
+# Exclude all contents of data/
+data/*
+# Re-include lexicon
+!data/dholuo_lexicon.json
+
+# --- Model Exclusions ---
+# Exclude all contents of models/
+models/*
+# Re-include POS model (dir)
+!models/luo-pos
+
+# Re-include TTS model (dir structure)
+!models/luo-tts
+
+# Exclude contents of luo-tts
+models/luo-tts/*
+# Re-include female dir
+!models/luo-tts/female
+
+# Exclude contents of female dir
+models/luo-tts/female/*
+# Re-include specific files
+!models/luo-tts/female/config.json
+!models/luo-tts/female/checkpoint_180000.pth

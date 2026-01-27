@@ -8,6 +8,9 @@ wheels/
 dholuo_tts.code-workspace
 notes.txt
 
+# Environment variables
+.env
+
 # Virtual environments
 .venv
 /data/
