@@ -13,6 +13,20 @@ textarea, .gr-text-input {
     line-height: 1.6 !important;
 }
 
+/* --- CUSTOM SECTION LABELS --- */
+.section-label {
+    display: inline-block;
+    padding: 2px 8px;
+    background: #6366f1; /* Indigo-ish color matching Soft theme */
+    color: white !important;
+    border-radius: 4px;
+    font-size: 0.85em;
+    font-weight: 600;
+    margin-bottom: 8px;
+    box-shadow: 0 2px 4px rgba(99, 102, 241, 0.2);
+}
+
+
 /* --- POS TAG STYLING --- */
 .pos-container {
     padding: 1rem;

@@ -9,6 +9,12 @@
 
 This repository contains a complete pipeline for building a high-fidelity, natural-sounding Text-to-Speech (TTS) system for the **Dholuo** language. Unlike standard multilingual TTS, this system uses a **Part-of-Speech (POS) aware G2P (Grapheme-to-Phoneme)** approach to solve the problem of homograph disambiguation and tonal accuracy.
 
+## 🎯 Try the Demo
+
+**[🚀 Live Demo on Hugging Face Spaces](https://huggingface.co/spaces/sowallah/dholuo-tts-demo)**
+
+Experience the Dholuo TTS system in action with our interactive demo featuring male and female voice models.
+
 ---
 
 ## 🌟 Features
@@ -104,56 +110,30 @@ graph TD
 
 ```
 dholuo_tts/
-├── api/                   # FastAPI backend services
-│   ├── main.py            # API entry point
-│   ├── routes.py          # API endpoints
-│   └── cache.py           # Redis caching logic
-├── demo/                  # Gradio web interface
-│   ├── app.py             # Demo entry point
-│   ├── components.py      # UI components
-│   └── visualizations.py  # Waveform/Spectrogram plots
-├── docker/                # Deployment configurations
-│   ├── Dockerfile         # API Dockerfile
-│   ├── Dockerfile.demo    # Demo Dockerfile
-│   └── docker-compose.yml # Full stack orchestration
-├── scripts/               # Utility and launch scripts
-│   ├── launch_demo.sh     # Quick start script (Local/Docker)
-│   ├── verify_demo.py     # End-to-end pipeline verification
-│   └── upload_models_to_hub.py # HF Hub synchronization
-├── phonemizer.py          # G2P converter with tone injection
-├── tagger.py              # POS tagging with AfroXLMR
-├── utils.py               # Shared utilities and custom VITS model
-├── generate_lexicon.py    # Bulk IPA lexicon generator
-├── transcribe_audio.py    # Audio transcription & gender splitting
-├── preprocess_dhonam.py   # POS tagging pipeline
-├── create_vits_metadata.py # IPA conversion & metadata generation
-├── train_vits.py          # VITS training script
-├── tests/                 # Comprehensive test suite
-│   ├── test_phonemizer.py
-│   ├── test_integration.py
-│   ├── test_phonemizer_with_tagger.py
-│   ├── test_model.py      # End-to-end TTS inference test
-│   └── output/            # Generated test audio files
+├── api/                        # FastAPI backend
+├── demo/                       # Gradio interface
+├── docker/                     # Deployment configs
+├── scripts/                    # Utility scripts
+├── tests/                      # Test suite
+│
+├── phonemizer.py               # G2P with tone injection
+├── tagger.py                   # POS tagging
+├── utils.py                    # Shared utilities
+│
+├── generate_lexicon.py         # IPA lexicon generator
+├── transcribe_audio.py         # Audio transcription
+├── preprocess_dhonam.py        # POS tagging pipeline
+├── create_vits_metadata.py     # Metadata generation
+├── train_vits.py               # VITS training
+│
 ├── data/
-│   ├── dholuo_lexicon.json  # POS-aware IPA dictionary
-│   ├── audio/
-│   │   ├── wav/           # All audio files
-│   │   ├── wav_male/      # Male speaker audio
-│   │   └── wav_female/    # Female speaker audio
-│   └── csv/
-│       ├── users-meta.csv              # Speaker gender metadata
-│       ├── final_dataset.csv           # Combined transcribed dataset
-│       ├── male_dataset.csv            # Male transcriptions
-│       ├── female_dataset.csv          # Female transcriptions
-│       ├── tts-metadata.csv            # POS-tagged metadata
-│       ├── train_metadata.csv          # Combined training metadata
-│       ├── male_training_metadata.csv  # Male-specific metadata
-│       └── female_training_metadata.csv # Female-specific metadata
+│   ├── dholuo_lexicon.json     # POS-aware IPA dictionary
+│   ├── audio/                  # Audio files (wav, wav_male, wav_female)
+│   └── csv/                    # Datasets and metadata
+│
 └── models/
-    ├── luo-pos/             # Fine-tuned POS tagger
-    └── luo-tts/
-        ├── male/            # Male voice checkpoints
-        └── female/          # Female voice checkpoints
+    ├── luo-pos/                # Fine-tuned POS tagger
+    └── luo-tts/                # Gender-specific TTS checkpoints
 ```
 
 ---

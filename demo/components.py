@@ -68,8 +68,11 @@ def OptionsPanel():
 def OutputSection():
     with gr.Row():
         with gr.Column(scale=1):
-            pos_output = gr.HTML(label="POS Tags")
-            ipa_output = gr.Markdown(label="IPA Transcription")
+            gr.Markdown("<div class='section-label'>🏷️ POS Tagging</div>")
+            pos_output = gr.HTML()
+            
+            gr.Markdown("<div class='section-label'>📖 IPA Transcription</div>")
+            ipa_output = gr.Markdown()
             
         with gr.Column(scale=1):
             audio_output = gr.Audio(
